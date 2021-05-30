@@ -6,6 +6,9 @@
 import sys
 import glob
 import serial
+import inspect
+import types
+from io import StringIO
 
 import Python_Coloring
 from PyQt5 import QtCore
@@ -260,6 +263,7 @@ class UI(QMainWindow):
         filemenu = menu.addMenu('File')
         Port = menu.addMenu('Port')
         Run = menu.addMenu('Run')
+        self.fastExecutionMenu = menu.addMenu('Fast Execution')
 
         # As any PC or laptop have many ports, so I need to list them to the User
         # so I made (Port_Action) to add the Ports got from (serial_ports()) function
@@ -278,11 +282,13 @@ class UI(QMainWindow):
 #        Port_Action.triggered.connect(self.Port)
 #        Port.addAction(Port_Action)
 
+        
         # Making and adding Run Actions
         RunAction = QAction("Run", self)
         RunAction.triggered.connect(self.Run)
         Run.addAction(RunAction)
 
+        self.fastExecutionMenu.aboutToShow.connect(self.createFastExecution)
         # Making and adding File Features
         Save_Action = QAction("Save", self)
         Save_Action.triggered.connect(self.save)
@@ -311,6 +317,8 @@ class UI(QMainWindow):
         self.setCentralWidget(widget)
         self.show()
 
+    
+
     ###########################        Start OF the Functions          ##################
     def Run(self):
         if self.port_flag == 0:
@@ -325,7 +333,41 @@ class UI(QMainWindow):
         else:
             text2.append("Please Select Your Port Number First")
 
+    def getFunParameters(self, funObj):
+        args = inspect.getfullargspec(funObj)
+        args1 = args[0]
+        vals = []
+        for i in range(len(args1)):
+            msg = "Type value of parameter " + args1[i]
+            input, ok = QInputDialog.getText(self, args1[i] + " Value", msg)
+            if not ok:
+                return None
+            vals.append(input)
+        return vals
 
+    def getFunList(self):
+        c = text.toPlainText()
+        module = types.ModuleType('codeModule')
+        exec(c, module.__dict__)
+        funs = [ (n, obj) for n,obj in inspect.getmembers(module) if inspect.isfunction(obj) ]
+        return funs
+
+    def execFun(self, funObject):
+        def result():
+            paramVals = self.getFunParameters(funObject)
+            paramString = ",".join(paramVals)
+            returnedValue = eval("funObject(" + paramString + ")")
+            text2.append("returned value is " + repr(returnedValue) + "\n")
+        return result
+
+    def createFastExecution(self):
+        funs = self.getFunList()
+        self.fastExecutionMenu.clear()
+        for funName, funObject in funs:
+            t = QAction("Execute", self)
+            t.triggered.connect(self.execFun(funObject))
+            self.fastExecutionMenu.addAction(t)
+            
     # this function is made to get which port was selected by the user
     @QtCore.pyqtSlot()
     def PortClicked(self):
@@ -333,12 +375,9 @@ class UI(QMainWindow):
         self.portNo = action.text()
         self.port_flag = 0
 
-
-
     # I made this function to save the code into a file
     def save(self):
         self.b.reading.emit("name")
-
 
     # I made this function to open a file and exhibits it to the user in a text editor
     def open(self):
@@ -349,7 +388,6 @@ class UI(QMainWindow):
             with f:
                 data = f.read()
             self.Open_Signal.reading.emit(data)
-
 
 #
 #
